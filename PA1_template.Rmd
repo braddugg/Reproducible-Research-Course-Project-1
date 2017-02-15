@@ -1,0 +1,127 @@
+---
+title: "Assignment 1"
+author: "Brad"
+date: "February 14, 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+
+activity <- read.csv("activity.csv")
+str(activity)
+
+library(dplyr)
+
+activity <- mutate(activity, date = as.Date(as.character(date), "%Y-%m-%d"))
+
+##mean total number of steps taken per day
+
+steps_per_day <- aggregate(steps ~ date, data = activity, sum, na.rm = TRUE)
+
+hist(steps_per_day$steps, main = "Histogram of steps taken", xlab = "Steps", ylab = "No.of times", breaks = 16, col = "blue")
+
+mean_median_steps_per_day <- group_by(activity, date) %>%
+    summarise(mean = mean(steps, na.rm = TRUE),
+              median = median(steps, na.rm = TRUE))
+
+dim(mean_median_steps_per_day)
+
+
+##average daily activity pattern
+
+interval_steps <- group_by(activity, interval) %>%
+    summarise(mean = mean(steps, na.rm = TRUE))
+with(interval_steps, 
+     plot(interval, mean, 
+          type = "l", 
+          xlab = "5-minute interval",
+          ylab = "Average per time interval"))
+
+max_steps_interval <- interval_steps$interval[which.max(interval_steps$mean)]
+max_steps_interval
+
+#Imputing missing values
+
+any(is.na(activity$steps))
+
+any(is.na(levels(activity$date)))
+
+any(is.na(activity$interval))
+
+NA_total <- sum(is.na(activity$steps))
+NA_proportion <- sum(is.na(activity$steps)) / nrow(activity)
+
+activity_copy <- activity
+rm(activity)  
+l <- nrow(activity_copy)
+for (i in 1:l) {
+    if (is.na(activity_copy$steps[i])) {
+        today = activity_copy$date[i]
+        sub_value = mean_median_steps_per_day[mean_median_steps_per_day$date == today, "median"]
+        if (!is.na(sub_value)) {
+            activity_copy$steps[i] = sub_value
+        } else {
+            pattern = activity_copy$interval[i]
+            sub_value = interval_steps[interval_steps$interval == pattern, "mean"]
+            activity_copy$steps[i] = sub_value
+        }
+    }
+}
+
+sum(is.na(activity_copy$steps))
+
+str(activity_copy)
+
+activity_copy <- mutate(activity_copy, steps = as.numeric(steps))
+
+write.csv(activity_copy, file = "activity_copy.csv")
+
+library(dplyr)
+sum_mean_median_day <- group_by(activity_copy, date) %>%
+    summarise(sum_steps = sum(steps),
+              mean_steps = mean(steps),
+              median_steps = median(steps))
+sum_mean_median_day
+
+str(sum_mean_median_day)
+
+par(mfcol = c(2,1))
+
+hist(sum_mean_median_day$sum_steps, main = "Histogram of steps AFTER missing data filling", xlab = "Steps", breaks = 16, col = "red")
+hist(steps_per_day$steps, main = "Histogram of steps BEFORE missing data filling", xlab = "Steps", breaks = 16, col = "blue", ylim = c(0,15))
+
+plot(sum_mean_median_day$date, sum_mean_median_day$mean_steps, type = "h", pch = 1, ylab = "Sum / Mean of Steps", col = "red")
+points(mean_median_steps_per_day$date, mean_median_steps_per_day$mean, pch = 4)
+legend("topleft", pch = c(1,4), col = c("red", "black"), legend = c("before", "after"))
+
+##differences in activity patterns
+
+class(activity_copy$date)
+
+state <- ifelse(weekdays(activity_copy$date) %in% c("Saturday", "Sunday"), "weekend", "weekday")
+state <- as.factor(state)
+activity_copy$state <- state
+str(activity_copy)
+
+average_steps_state <- group_by(activity_copy, state, interval) %>%
+    summarise(average_steps = mean(steps))
+str(average_steps_state)
+
+library(ggplot2)
+x <- ggplot(average_steps_state, aes(x = interval, y = average_steps)) +
+    geom_line() + 
+    facet_grid(state ~ .) + 
+    labs(x = "Interval") + 
+    labs(y = "Number of steps")
+x
+
+
+##using lattice system
+library(lattice)
+xyplot(average_steps ~ interval | state, data = average_steps_state, type = "l", layout = c(1,2), xlab = "Interval", ylab = "Number of steps")
+
+```
+
+
